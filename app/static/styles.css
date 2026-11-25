@@ -1,0 +1,36 @@
+:root {
+    color: #172a24;
+    background: #f3f6f0;
+    font: 1rem/1.6 system-ui, sans-serif;
+}
+
+main {
+    width: min(42rem, calc(100% - 2rem));
+    margin: clamp(2rem, 10vh, 6rem) auto;
+}
+
+h1,
+h2 {
+    line-height: 1.2;
+}
+
+section {
+    margin-block: 2rem;
+    border-top: 1px solid #acbdb1;
+}
+
+nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+}
+
+a {
+    color: #12564a;
+}
+
+pre {
+    padding: 1rem;
+    overflow-x: auto;
+    background: #fff;
+}
