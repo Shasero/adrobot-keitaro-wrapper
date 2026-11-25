@@ -410,3 +410,78 @@ def test_unknown_put_applied_then_explicit_refresh(setup):
     done = call(api,"refresh",locked.json()["editor"]).json()
     assert done["status"] == "ready" and not done["dirty"]
     assert len(remote.puts) == 1
+
+
+def uncertain_base(api, remote):
+    state = draft(api)
+    remote.put_reply = httpx.ReadTimeout(PRIVATE)
+    failed = call(api, "push", state).json()["editor"]
+    remote.put_reply = None
+    checked = call(api, "refresh", failed).json()
+    assert checked["manual_check_required"]
+    return checked
+
+
+def test_manual_check_after_restart(setup):
+    api, remote, restart = setup
+    state = action(api, uncertain_base(api, remote), "add", 30)
+    with restart() as other:
+        state = other.get(ROOT).json()
+        denied = call(other, "push", state)
+        assert denied.status_code == 409 and denied.json()["editor"] == state
+        assert call(other, "push", state, acknowledge_manual_check="yes").status_code == 422
+        assert len(remote.puts) == 1
+        saved = call(other, "push", state, acknowledge_manual_check=True).json()
+        assert not saved["manual_check_required"] and not saved["dirty"]
+        assert len(remote.puts) == 2 and remote.calls[-1] == ("GET", "streams/2")
+
+
+def test_manual_check_survives_metadata_and_conflicts(setup):
+    api, remote, _ = setup
+    state = call(api, "cancel", uncertain_base(api, remote)).json()
+    pinned = action(api, state, "pin", 10)
+    saved = call(api, "push", pinned).json()
+    refreshed = call(api, "refresh", saved).json()
+    assert all(item["manual_check_required"] for item in (state, pinned, saved, refreshed))
+    unpinned = action(api, refreshed, "unpin", 10)
+    state = action(api, unpinned, "add", 20)
+    assert call(api, "push", unpinned, acknowledge_manual_check=True).status_code == 409
+    remote.stream["offers"] = [binding(30, 100)]
+    conflict = call(api, "push", state, acknowledge_manual_check=True)
+    assert conflict.status_code == 409 and conflict.json()["editor"]["manual_check_required"]
+    assert len(remote.puts) == 1
+
+
+def test_manual_check_retained_after_acknowledged_timeout(setup):
+    api, remote, _ = setup
+    state = uncertain_base(api, remote)
+    remote.put_reply = httpx.ReadTimeout(PRIVATE)
+    failed = call(api, "push", state, acknowledge_manual_check=True).json()["editor"]
+    assert failed["status"] == "unknown" and failed["manual_check_required"]
+    assert len(remote.puts) == 2
+
+
+@pytest.mark.parametrize("code,expected", [("base_confirmed", True), (None, False)])
+def test_legacy_manual_check(setup, code, expected):
+    api, remote, _ = setup
+    api.get(ROOT)
+    with api.app.state.session_factory.begin() as db:
+        row = db.get(OfferDraft, (1, 2))
+        legacy = dict(row.document, error_code=code)
+        del legacy["manual_check_required"]
+        row.document = legacy
+    assert api.get(ROOT).json()["manual_check_required"] is expected
+    assert not remote.puts
+
+
+def test_preflight_recovery_does_not_require_manual_check(setup):
+    api, remote, _ = setup
+    draft(api)
+    with api.app.state.session_factory.begin() as db:
+        row = db.get(OfferDraft, (1, 2))
+        row.document = dict(row.document, status="publishing", stage="preflight",
+                            target=[binding(10, 50), binding(20, 50)])
+    state = api.get(ROOT).json()
+    checked = call(api, "refresh", state).json()
+    assert checked["status"] == "ready" and not checked["manual_check_required"]
+    assert checked["error_code"] is None and not remote.puts

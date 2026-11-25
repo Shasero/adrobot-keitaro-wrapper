@@ -18,6 +18,7 @@ class EditorView(StrictModel):
     status: Status
     stage: str
     error_code: str | None
+    manual_check_required: bool
     outcome_unknown: bool
     changes: Difference
 
@@ -38,6 +39,7 @@ class Editor:
                           revision=revision, rows=doc.rows, dirty=doc.dirty,
                           metadata_changed=doc.metadata_changed, status=doc.status,
                           stage=doc.stage, error_code=doc.error_code, changes=doc.changes,
+                          manual_check_required=doc.manual_check_required,
                           outcome_unknown=doc.locked and doc.stage in ("put", "verify"))
 
     def remote(self) -> Snapshot:
@@ -106,8 +108,10 @@ class Editor:
                 if not changes.stream_changed and remote.offers == doc.target:
                     self.accept(doc)
                 elif not changes.stream_changed and remote.offers == base:
+                    observed_write = doc.stage in ("put", "verify")
                     doc.status, doc.stage, doc.target = "ready", "idle", None
-                    doc.error_code = "base_confirmed"
+                    doc.error_code = "base_confirmed" if observed_write else None
+                    doc.manual_check_required |= observed_write
                 else:
                     doc.status, doc.error_code = "reconciliation_conflict", "conflict"
             elif remote.offers != base or changes.stream_changed:
@@ -132,11 +136,16 @@ class Editor:
         doc.status, doc.stage, doc.error_code = "ready", "idle", None
         doc.target, doc.changes = None, Difference()
 
-    def push(self, revision: int) -> EditorView:
+    def push(self, revision: int, acknowledge_manual_check: bool = False) -> EditorView:
         with self.store.publication_lock():
             doc = self.current(revision)
             if doc.status == "conflict":
                 raise EditorError("conflict")
+            if doc.dirty and doc.manual_check_required and not acknowledge_manual_check:
+                self.remote()  # Check ownership before returning stored draft details.
+                error = EditorError("manual_check_required")
+                error.editor = self.view(revision, doc)
+                raise error
             target = bindings(doc.rows)
             doc.status, doc.stage, doc.target = "publishing", "preflight", target
             doc.error_code = None
@@ -172,6 +181,7 @@ class Editor:
                     after = snapshot(self.client.get_stream(self.store.key[1]), *self.store.key)
                     if after.offers != target or after.fingerprint != doc.fingerprint:
                         raise EditorError("verification")
+                    doc.manual_check_required = False
             except (CampaignError, KeitaroError, EditorError) as exc:
                 code = error_code(exc)
                 if code in ("storage", "stale_revision"):

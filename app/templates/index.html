@@ -4,24 +4,98 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ app_name }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/workspace.js" type="module"></script>
 </head>
 <body>
-    <main>
-        <h1>{{ app_name }}</h1>
-        <p>Каркас приложения. Интеграция Keitaro ещё не реализована в формах. Создание кампаний доступно через HTTP API.</p>
-        <section aria-labelledby="campaigns">
-            <h2 id="campaigns">Создатель кампаний</h2>
-            <p>Будет создавать кампании по названию, стране и выбранному офферу.</p>
-        </section>
-        <section aria-labelledby="offers">
-            <h2 id="offers">Редактор офферов</h2>
-            <p>Будет управлять привязками офферов и их долями в потоках кампании.</p>
-        </section>
-        <nav aria-label="Служебные страницы">
-            <a href="{{ url_for('docs') }}">Документация API</a>
-            <a href="{{ url_for('health') }}">Проверка доступности</a>
+    <header class="top">
+        <div class="frame top-inner">
+            <h1>{{ app_name }}</h1>
+            <nav aria-label="Служебные страницы">
+                <a href="/docs">Документация API</a>
+                <a href="/health">Проверка доступности</a>
+            </nav>
+        </div>
+    </header>
+    <main class="frame workspace">
+        <nav class="sections" aria-label="Разделы">
+            <button id="show-create" type="button" aria-pressed="true" aria-controls="creator">Создатель кампаний</button>
+            <button id="show-editor" type="button" aria-pressed="false" aria-controls="editor">Редактор офферов</button>
         </nav>
+        <section id="creator" aria-labelledby="creator-title">
+            <div class="heading">
+                <h2 id="creator-title">Создание кампании</h2>
+                <p>Задайте название, страну и оффер для замыкающего потока.</p>
+            </div>
+            <form id="create-form">
+                <fieldset id="create-fields" disabled>
+                    <legend class="sr-only">Параметры кампании</legend>
+                    <div class="grid creator-grid">
+                        <div>
+                            <label for="campaign-name">Название кампании</label>
+                            <input id="campaign-name" maxlength="120" required placeholder="Например, Весенний запуск" aria-describedby="prefix-help">
+                            <small id="prefix-help">Сервер добавит префикс проекта, если его ещё нет.</small>
+                        </div>
+                        <div>
+                            <label for="geo">GEO</label>
+                            <input id="geo" maxlength="2" size="2" required pattern="[A-Za-z]{2}" placeholder="US" aria-describedby="geo-help">
+                            <small id="geo-help">Две буквы ISO 3166-1 alpha-2.</small>
+                        </div>
+                    </div>
+                    <div class="search">
+                        <label for="create-query">Оффер</label>
+                        <input id="create-query" type="search" maxlength="120" autocomplete="off" placeholder="Введите название или ID" aria-controls="create-results">
+                        <div id="create-search-status" class="hint" role="status"></div>
+                        <ul id="create-results" class="results" aria-label="Найденные офферы"></ul>
+                        <p id="selected-offer" class="selection" role="status">Оффер не выбран</p>
+                    </div>
+                </fieldset>
+                <div class="toolbar">
+                    <button id="create-submit" class="primary" type="submit" disabled>Создать кампанию</button>
+                    <button id="check-operation" type="button" hidden>Проверить статус</button>
+                    <button id="new-operation" type="button" hidden>Новая операция</button>
+                </div>
+            </form>
+            <div class="feedback" id="create-status" role="status"></div>
+            <dl id="operation" class="details" hidden></dl>
+        </section>
+        <section id="editor" aria-labelledby="editor-title" hidden>
+            <div class="heading">
+                <h2 id="editor-title">Редактор офферов</h2>
+                <p>Выберите кампанию и поток. Изменения сохраняются в черновике до публикации.</p>
+            </div>
+            <div class="grid selectors">
+                <div><label for="campaign">Кампания</label><select id="campaign" disabled><option value="">Выберите кампанию</option></select></div>
+                <div><label for="stream">Поток</label><select id="stream" disabled><option value="">Выберите поток</option></select></div>
+                <button id="load-catalog" type="button">Обновить список</button>
+            </div>
+            <div id="editor-status" class="feedback" role="status"></div>
+            <div id="draft" hidden>
+                <div class="summary">
+                    <strong id="draft-state" role="status"></strong>
+                    <span id="draft-total"></span>
+                </div>
+                <p id="draft-note" class="hint" role="status"></p>
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Привязки офферов">
+                    <table>
+                        <thead><tr><th scope="col">Оффер</th><th scope="col">Доля</th><th scope="col">Состояние</th><th scope="col">Действия</th></tr></thead>
+                        <tbody id="offer-rows"></tbody>
+                    </table>
+                </div>
+                <div class="search editor-search">
+                    <label for="editor-query">Добавить оффер</label>
+                    <input id="editor-query" type="search" maxlength="120" autocomplete="off" disabled placeholder="Введите название или ID" aria-controls="editor-results">
+                    <div id="editor-search-status" class="hint" role="status"></div>
+                    <ul id="editor-results" class="results" aria-label="Офферы для добавления"></ul>
+                </div>
+            </div>
+            <div class="toolbar editor-toolbar">
+                <button id="reload-editor" type="button" hidden>Перечитать черновик</button>
+                <button id="refresh-editor" type="button" hidden>Refresh · Сверить с Keitaro</button>
+                <button id="cancel-editor" type="button" hidden>Cancel · Отменить правки</button>
+                <button id="push-editor" class="primary" type="button" hidden>Push to KT · Опубликовать</button>
+            </div>
+        </section>
     </main>
 </body>
 </html>

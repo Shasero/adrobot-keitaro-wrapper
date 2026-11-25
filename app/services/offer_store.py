@@ -23,11 +23,14 @@ class Document(StrictModel):
     status: Status = "ready"
     stage: Literal["idle", "preflight", "put", "verify"] = "idle"
     error_code: str | None = None
+    manual_check_required: bool = False
     changes: Difference = Difference()
     target: list[Binding] | None = None
 
     @model_validator(mode="after")
     def consistent(self):
+        if "manual_check_required" not in self.model_fields_set and self.error_code == "base_confirmed":
+            self.manual_check_required = True
         for rows in (self.saved, self.rows):
             keys = [r.offer_id for r in rows]
             if keys != sorted(set(keys)):

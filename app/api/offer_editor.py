@@ -14,6 +14,7 @@ from app.services.offer_store import Store
 from app.services.offer_streams import Choice, campaigns, streams
 
 ERRORS = dict(MESSAGES,
+    manual_check_required=(409, "Подтвердите ручную сверку перед повторной публикацией."),
     forbidden=(403, "Кампания или поток вне выбранного проекта."),
     unsupported_stream=(422, "Редактор поддерживает потоки landings типов regular и default."),
     unsupported_bindings=(422, "Состав, состояния или доли привязок не поддерживаются."),
@@ -31,6 +32,10 @@ ERRORS = dict(MESSAGES,
 
 class Version(StrictModel):
     expected_revision: PositiveID
+
+
+class Publication(Version):
+    acknowledge_manual_check: bool = False
 
 
 class Command(Version):
@@ -117,5 +122,5 @@ def refresh(selected: Selected, data: Version) -> EditorView:
 
 
 @router.post(ROOT + "/push")
-def push(selected: Selected, data: Version) -> EditorView:
-    return selected.push(data.expected_revision)
+def push(selected: Selected, data: Publication) -> EditorView:
+    return selected.push(data.expected_revision, data.acknowledge_manual_check)

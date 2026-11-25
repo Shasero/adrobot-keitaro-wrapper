@@ -11,7 +11,8 @@ def test_home_and_local_css(client):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "<h1>AdRobot</h1>" in response.text
-    assert "Каркас приложения. Интеграция Keitaro ещё не реализована" in response.text
+    assert "Создатель кампаний" in response.text
+    assert "Редактор офферов" in response.text
     assert "/static/styles.css" in response.text
 
     css = client.get("/static/styles.css")
