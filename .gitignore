@@ -221,3 +221,36 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local environment overrides (.env is already covered above)
+.env.*
+!.env.example
+
+# Local SQLite databases and sidecar files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Local API diagnostics in the repository root
+/keitaro-probe/
+/keitaro-second-probe/
+/keitaro-probe.zip
+/keitaro-second-probe.zip
+/campaign-create-response.json
+/campaigns-diagnostic.json
+/campaigns-error.txt
+/streams-search.json
+/streams-error.txt
+/campaign-*-streams.json
+/stream-*-verified.json
+/stream-*-after-*.json
+/api-probe-*.json
