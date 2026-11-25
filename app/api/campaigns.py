@@ -44,6 +44,10 @@ def campaign_error(request: Request, exc: service.CampaignError) -> JSONResponse
 
 
 def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
+    route = request.scope.get("route")
+    if route and route.endpoint.__module__ == "app.api.offer_editor":
+        return JSONResponse({"code": "invalid_input", "message": "Проверьте параметры запроса.",
+                             "editor": None}, status_code=422)
     key = None
     if isinstance(exc.body, dict) and isinstance(exc.body.get("operation_id"), str):
         try:

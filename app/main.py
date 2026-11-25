@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import sessionmaker
 
-from app.api import campaigns
+from app.api import campaigns, offer_editor
 from app.api.health import router as health_router
 from app.core.config import Settings
 from app.db.session import create_db_engine
@@ -38,6 +38,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.add_exception_handler(CampaignError, campaigns.campaign_error)
     application.add_exception_handler(RequestValidationError, campaigns.invalid_request)
     application.include_router(campaigns.router)
+    application.include_router(offer_editor.router)
+    application.add_exception_handler(offer_editor.EditorError, offer_editor.editor_error)
     application.include_router(health_router)
     application.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=APP_DIR / "templates")

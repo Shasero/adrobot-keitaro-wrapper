@@ -254,3 +254,6 @@ __marimo__/
 /stream-*-verified.json
 /stream-*-after-*.json
 /api-probe-*.json
+
+# Local cross-process locks for offer publication and reconciliation
+.adrobot-editor-locks/

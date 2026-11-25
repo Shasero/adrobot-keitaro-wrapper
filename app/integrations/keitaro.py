@@ -148,11 +148,12 @@ class KeitaroClient:
         if not name[len(self._prefix):].strip():
             raise KeitaroError("write_forbidden")
 
-    def _check_campaign(self, campaign_id: int) -> None:
+    def checked_campaign(self, campaign_id: int) -> Record:
         campaign = self.get_campaign(campaign_id)
         if not _matches_id(campaign.get("id"), campaign_id):
             raise KeitaroError("write_forbidden")
         self._check_name(campaign.get("name"))
+        return campaign
 
     def create_campaign(self, payload: Record) -> Record:
         body = payload.copy()
@@ -172,13 +173,14 @@ class KeitaroClient:
         campaign_id = _positive_id(body.get("campaign_id"))
         if "offers" in body:
             _check_offer_ids(body["offers"])
-        self._check_campaign(campaign_id)
+        self.checked_campaign(campaign_id)
         if before_post is not None:
             before_post()
         return self._request("POST", "streams", dict, body=body)
 
     def update_stream_offers(
-        self, campaign_id: int, stream_id: int, offers: list[Record]
+        self, campaign_id: int, stream_id: int, offers: list[Record], *,
+        before_put: Callable[[Record], None] | None = None,
     ) -> Record:
         _positive_id(stream_id)
         _check_offer_ids(offers)
@@ -188,7 +190,13 @@ class KeitaroClient:
         except KeyError:
             raise KeitaroError("invalid_payload") from None
 
-        self._check_campaign(campaign_id)
+        stream = self.checked_stream(campaign_id, stream_id)
+        if before_put is not None:
+            before_put(stream)
+        return self._request("PUT", f"streams/{stream_id}", dict, body={"offers": target})
+
+    def checked_stream(self, campaign_id: int, stream_id: int) -> Record:
+        campaign = self.checked_campaign(campaign_id)
         streams = self.list_campaign_streams(campaign_id)
         matches = [row for row in streams if _matches_id(row.get("id"), stream_id)]
         if len(matches) != 1:
@@ -198,7 +206,15 @@ class KeitaroClient:
         if not _matches_id(stream.get("id"), stream_id):
             raise KeitaroError("write_forbidden")
         _check_stream_campaign(stream, campaign_id)
-        return self._request("PUT", f"streams/{stream_id}", dict, body={"offers": target})
+        for row in (matches[0], stream):
+            if "campaign_name" in row and row["campaign_name"] != campaign["name"]:
+                raise KeitaroError("write_forbidden")
+        for field in ("name", "schema", "type", "state", "position"):
+            if field in matches[0] and field in stream:
+                listed, actual = matches[0][field], stream[field]
+                if type(listed) is not type(actual) or listed != actual:
+                    raise KeitaroError("protocol")
+        return stream
 
 
 def _check_offer_ids(offers: object) -> None:
