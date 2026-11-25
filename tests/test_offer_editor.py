@@ -1,6 +1,9 @@
 import json
-from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+import os
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from copy import deepcopy
+from pathlib import Path
 from threading import Barrier, Event, local
 
 import httpx
@@ -9,6 +12,8 @@ from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import event, inspect, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.engine import URL
+from sqlalchemy.orm import sessionmaker
 
 from app.api.campaigns import get_connection
 from app.core.config import Settings
@@ -16,7 +21,8 @@ from app.db.session import create_db_engine
 from app.integrations.keitaro import KeitaroClient
 from app.main import create_app
 from app.models import OfferDraft
-from app.services.offer_shares import Row, distribute
+from app.services.offer_editor import Editor
+from app.services.offer_shares import EditorError, Row, distribute
 from app.services.offer_store import Store
 
 ROOT = "/api/campaigns/1/streams/2/editor"
@@ -315,6 +321,50 @@ def test_concurrency_and_intent(setup):
             release.set()
         assert task.result().status_code == 200
     assert len(remote.puts) == 1
+
+
+def _compete_with_publication(database):
+    engine = create_db_engine(str(URL.create("sqlite", database=database)))
+    remote = Remote()
+    remote.connections = local()
+    settings = Settings(_env_file=None, keitaro_api_key=PRIVATE,
+                        keitaro_base_url="https://tracker.test/admin_api/v1")
+    try:
+        with KeitaroClient(settings, transport=httpx.MockTransport(remote)) as kt:
+            store = Store(sessionmaker(bind=engine), 1, 2)
+            editor = Editor(store, kt)
+            revision, _ = store.read()
+            outcomes = []
+            for operation in (editor.push, editor.refresh):
+                try:
+                    outcomes.append(operation(revision).status)
+                except EditorError as exc:
+                    outcomes.append(exc.code)
+            return outcomes, remote.calls
+    finally:
+        engine.dispose()
+
+
+def test_publication_excludes_other_process(setup, tmp_path):
+    api, remote, _ = setup
+    state = draft(api)
+    database = Path(api.app.state.session_factory.kw["bind"].url.database)
+    # POSIX permits different filenames to refer to the same SQLite database.
+    if os.name == "posix":
+        alias = tmp_path / "alias.db"
+        alias.symlink_to(database)
+        database = alias
+
+    with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn")) as worker:
+        def during_put(_):
+            outcomes, calls = worker.submit(_compete_with_publication, str(database)).result(timeout=30)
+            assert outcomes == ["busy", "busy"]
+            assert calls == []
+
+        remote.after = during_put
+        assert call(api, "push", state).status_code == 200
+    assert remote.puts == [{"offers": [binding(10, 50), binding(20, 50)]}]
+    assert remote.calls[-1] == ("GET", "streams/2")
 
 
 def test_concurrent_local_updates(setup,monkeypatch):

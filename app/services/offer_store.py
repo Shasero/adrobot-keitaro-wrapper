@@ -105,8 +105,9 @@ class Store:
             database = db.get_bind().url.database
         if not database or database == ":memory:":
             raise EditorError("storage")
-        folder = Path(database).resolve().parent / ".adrobot-editor-locks"
-        filename = f"{Path(database).name}.{self.key[0]}.{self.key[1]}.lock"
+        database_path = Path(database).resolve()
+        folder = database_path.parent / ".adrobot-editor-locks"
+        filename = f"{database_path.name}.{self.key[0]}.{self.key[1]}.lock"
         try:
             folder.mkdir(exist_ok=True)
             handle = (folder / filename).open("a+b")
