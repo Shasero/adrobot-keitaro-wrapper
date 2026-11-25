@@ -1,4 +1,4 @@
-from pydantic import Field, PositiveInt, SecretStr, field_validator
+from pydantic import Field, PositiveInt, SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +30,10 @@ class Settings(BaseSettings):
         mode="before",
     )
     @classmethod
-    def empty_to_none(cls, value: object) -> object:
+    def empty_to_none(cls, value: object, info: ValidationInfo) -> object:
         if isinstance(value, str) and not value.strip():
             return None
+        if info.field_name.endswith("_id") and value is not None:
+            if type(value) is not int and not (isinstance(value, str) and value.isascii() and value.isdecimal()):
+                raise ValueError("Expected a positive integer ID")
         return value

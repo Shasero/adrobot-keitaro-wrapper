@@ -2,6 +2,7 @@
 
 import math
 import re
+from collections.abc import Callable
 from typing import Any, Self
 
 import httpx
@@ -166,12 +167,14 @@ class KeitaroClient:
                     _positive_id(value)
         return self._request("POST", "campaigns", dict, body=body)
 
-    def create_stream(self, payload: Record) -> Record:
+    def create_stream(self, payload: Record, *, before_post: Callable[[], None] | None = None) -> Record:
         body = payload.copy()
         campaign_id = _positive_id(body.get("campaign_id"))
         if "offers" in body:
             _check_offer_ids(body["offers"])
         self._check_campaign(campaign_id)
+        if before_post is not None:
+            before_post()
         return self._request("POST", "streams", dict, body=body)
 
     def update_stream_offers(
