@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.integrations.keitaro import KeitaroClient, KeitaroError
 from app.services import campaigns as service
+from app.services.offer_search import Offer
 
 
 def get_connection(request: Request) -> Iterator[Callable[[], KeitaroClient]]:
@@ -58,10 +59,10 @@ def invalid_request(request: Request, exc: RequestValidationError) -> JSONRespon
 
 
 @router.get("/offers")
-def offers(connection: Connection, q: str = Query("", max_length=120),
-           limit: int = Query(20, ge=1, le=100)) -> list[service.Offer]:
+def offers(request: Request, connection: Connection, q: str = Query("", max_length=120),
+           limit: int = Query(20, ge=1, le=100)) -> list[Offer]:
     try:
-        return service.search_offers(connection(), q, limit)
+        return request.app.state.offer_search_cache.search(connection, q, limit)
     except KeitaroError as exc:
         raise service.CampaignError(service.upstream_code(exc)) from None
 

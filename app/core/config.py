@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     keitaro_traffic_source_id: PositiveInt | None = None
     campaign_name_prefix: str = "test_shapovalov_"
     keitaro_timeout_seconds: float = Field(default=15, gt=0, allow_inf_nan=False)
+    offer_cache_ttl_seconds: float = Field(default=300, gt=0, allow_inf_nan=False)
 
     @field_validator(
         "keitaro_api_key",

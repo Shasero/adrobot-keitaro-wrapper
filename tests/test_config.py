@@ -16,6 +16,7 @@ def test_defaults():
     assert settings.keitaro_traffic_source_id is None
     assert settings.campaign_name_prefix == "test_shapovalov_"
     assert settings.keitaro_timeout_seconds == 15
+    assert settings.offer_cache_ttl_seconds == 300
 
 
 def test_environment_overrides_dotenv(monkeypatch, tmp_path):
@@ -32,6 +33,7 @@ def test_environment_overrides_dotenv(monkeypatch, tmp_path):
     monkeypatch.setenv("KEITARO_DOMAIN_ID", "")
     monkeypatch.setenv("KEITARO_TRAFFIC_SOURCE_ID", "104")
     monkeypatch.setenv("KEITARO_API_KEY", "")
+    monkeypatch.setenv("OFFER_CACHE_TTL_SECONDS", "60")
 
     settings = Settings()
     assert settings.app_name == "AdRobot Test"
@@ -39,6 +41,7 @@ def test_environment_overrides_dotenv(monkeypatch, tmp_path):
     assert settings.keitaro_group_id is None
     assert settings.keitaro_traffic_source_id == 104
     assert settings.keitaro_api_key is None
+    assert settings.offer_cache_ttl_seconds == 60
 
 
 @pytest.mark.parametrize(
@@ -46,6 +49,8 @@ def test_environment_overrides_dotenv(monkeypatch, tmp_path):
     [
         ("KEITARO_TIMEOUT_SECONDS", "0"),
         ("KEITARO_TIMEOUT_SECONDS", "inf"),
+        ("OFFER_CACHE_TTL_SECONDS", "0"),
+        ("OFFER_CACHE_TTL_SECONDS", "inf"),
         ("KEITARO_DOMAIN_ID", "-1"),
         ("KEITARO_GROUP_ID", "0"),
         ("KEITARO_TRAFFIC_SOURCE_ID", "invalid"),

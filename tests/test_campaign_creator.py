@@ -270,15 +270,24 @@ def test_restart_does_not_resume(setup, body, database_url):
 def test_offers_search(setup):
     api, tracker = setup
     rows = [dict(id=i, name=f"Пример {i}", state="active", url=MARKER) for i in range(1, 26)]
-    tracker.overrides = dict.fromkeys(range(3), rows)
+    tracker.overrides[0] = rows + [dict(id=99, name="Пример", state="disabled")]
     response = api.get("/api/offers", params={"q": "ПРИМЕР", "limit": 2})
     assert response.json() == [{"id": 1, "name": "Пример 1"}, {"id": 2, "name": "Пример 2"}]
     assert len(api.get("/api/offers").json()) == 20
     assert api.get("/api/offers?q=25").json() == [{"id": 25, "name": "Пример 25"}]
-    tracker.overrides[3] = rows + [rows[0]]
-    assert api.get("/api/offers?limit=1").status_code == 502
+    assert api.get("/api/offers?q=99").json() == []
     assert api.get("/api/offers?limit=101").status_code == 422
-    assert tracker.calls == ["GET offers"] * 4
+    assert tracker.calls == ["GET offers"]
+
+
+def test_create_checks_fresh_offers_with_warm_search_cache(setup, body):
+    api, tracker = setup
+    assert api.get("/api/offers?q=51").json() == [{"id": 51, "name": "Demo"}]
+    tracker.overrides[4] = [{"id": 51, "name": "Demo", "state": "disabled"}]
+
+    response = post(api, body)
+    assert (response.status_code, response.json()["code"]) == (422, "offer_unavailable")
+    assert tracker.calls == ["GET offers"] + ORDER[:4]
 
 
 def test_missing_credentials(alembic_config, client, body):

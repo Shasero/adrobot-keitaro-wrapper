@@ -54,11 +54,6 @@ class CreateCampaign(BaseModel):
         return value.upper()
 
 
-class Offer(BaseModel):
-    id: int
-    name: str
-
-
 class Operation(BaseModel):
     operation_id: UUID
     name: str
@@ -134,14 +129,6 @@ def offers_by_id(client: KeitaroClient) -> dict[int, Record]:
             if not isinstance(row.get(field), str) or not row[field].strip():
                 raise CampaignError("protocol")
     return offers
-
-
-def search_offers(client: KeitaroClient, query: str, limit: int) -> list[Offer]:
-    query = query.strip().casefold()
-    return [
-        Offer(id=key, name=row["name"]) for key, row in offers_by_id(client).items()
-        if row["state"] == "active" and (query in row["name"].casefold() or query == str(key))
-    ][:limit]
 
 
 def snapshot(op: CampaignOperation) -> Operation:

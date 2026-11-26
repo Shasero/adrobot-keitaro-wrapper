@@ -14,6 +14,7 @@ from app.api.health import router as health_router
 from app.core.config import Settings
 from app.db.session import create_db_engine
 from app.services.campaigns import CampaignError
+from app.services.offer_search import OfferSearchCache
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -35,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.state.session_factory = sessionmaker(bind=engine)
     application.state.settings = settings
+    application.state.offer_search_cache = OfferSearchCache(settings.offer_cache_ttl_seconds)
     application.add_exception_handler(CampaignError, campaigns.campaign_error)
     application.add_exception_handler(RequestValidationError, campaigns.invalid_request)
     application.include_router(campaigns.router)

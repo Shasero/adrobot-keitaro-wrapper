@@ -439,9 +439,15 @@ def test_clean_refresh_keeps_unequal_pins_and_ignores_binding_metadata(setup):
 def test_drift_of_catalog_blocks_push(setup):
     api, remote, _ = setup
     state = draft(api)
+    assert api.get("/api/offers?q=20").json() == [{"id": 20, "name": "Demo 20"}]
     remote.catalog = [r for r in remote.catalog if r["id"] != 20]
+    remote.calls.clear()
     result = call(api,"push",state)
     assert result.status_code == 422 and result.json()["editor"]["dirty"]
+    assert remote.calls == [
+        ("GET", "campaigns/1"), ("GET", "campaigns/1/streams"),
+        ("GET", "streams/2"), ("GET", "offers"),
+    ]
     assert not remote.puts
 
 
