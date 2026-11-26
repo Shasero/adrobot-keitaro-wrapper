@@ -197,8 +197,32 @@ def test_http_errors_and_redirects(status):
         client.list_offers()
     assert caught.value.category == "http"
     assert caught.value.status_code == status
+    assert not caught.value.outcome_unknown
     assert len(calls) == 1
     assert "other.test" not in str(calls[0].url)
+    assert MARKER not in str(caught.value) + repr(caught.value)
+
+
+@pytest.mark.parametrize("status", [300, 301, 302, 303, 304, 307, 308])
+@pytest.mark.parametrize("method", ["POST", "PUT"])
+def test_write_redirects_are_unknown_and_not_followed(status, method):
+    redirect = httpx.Response(
+        status, text=MARKER, headers={"Location": f"https://other.test/{MARKER}"}
+    )
+    prerequisites = [CAMPAIGN, [STREAM], STREAM] if method == "PUT" else []
+    client, calls = exchange(*prerequisites, redirect)
+    with client, pytest.raises(KeitaroError) as caught:
+        if method == "POST":
+            client.create_campaign({"name": CAMPAIGN["name"]})
+        else:
+            client.update_stream_offers(11, 22, [])
+
+    assert caught.value.category == "http"
+    assert caught.value.status_code == status
+    assert caught.value.outcome_unknown
+    expected_methods = ["POST"] if method == "POST" else ["GET", "GET", "GET", "PUT"]
+    assert [request.method for request in calls] == expected_methods
+    assert all(str(request.url).startswith(BASE + "/") for request in calls)
     assert MARKER not in str(caught.value) + repr(caught.value)
 
 

@@ -7,7 +7,7 @@ from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.db.session import get_db
+from app.db.session import create_db_engine, get_db
 from app.models import ManagedCampaign
 
 
@@ -15,6 +15,15 @@ from app.models import ManagedCampaign
 def db_request(alembic_config, client):
     command.upgrade(alembic_config, "head")
     return Request({"type": "http", "app": client.app})
+
+
+@pytest.mark.parametrize("database_url", [
+    "postgresql://localhost/adrobot",
+    "mysql://localhost/adrobot",
+])
+def test_create_db_engine_rejects_non_sqlite(database_url):
+    with pytest.raises(ValueError, match="SQLite"):
+        create_db_engine(database_url)
 
 
 def test_create_read_and_release_session(db_request):

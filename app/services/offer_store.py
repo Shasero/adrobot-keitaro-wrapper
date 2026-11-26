@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import ValidationError, model_validator
 from sqlalchemy import update
+from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
@@ -14,6 +15,28 @@ from app.models import OfferDraft
 from app.services.offer_shares import Binding, Difference, EditorError, Row, StrictModel, bindings, metadata
 
 Status = Literal["ready", "conflict", "publishing", "unknown", "verification_failed", "reconciliation_conflict"]
+
+
+def _has_query_value(url: URL, key: str, expected: str) -> bool:
+    value = url.query.get(key)
+    values = value if isinstance(value, tuple) else (value,)
+    return any(isinstance(item, str) and item.casefold() == expected for item in values)
+
+
+def _is_memory_sqlite(url: URL) -> bool:
+    """Return whether a SQLAlchemy SQLite URL targets an in-memory database."""
+    if url.get_backend_name() != "sqlite":
+        return False
+
+    database = url.database
+    if database in (None, "", ":memory:"):
+        return True
+
+    # SQLite URI filenames are interpreted as URIs only when uri=true is set.
+    if not database.startswith("file:") or not _has_query_value(url, "uri", "true"):
+        return False
+
+    return database == "file::memory:" or _has_query_value(url, "mode", "memory")
 
 
 class Document(StrictModel):
@@ -102,8 +125,9 @@ class Store:
         # CAS protects the draft. The OS lock keeps explicit recovery from
         # declaring a live PUT absent. The OS releases it on process death.
         with self.factory() as db:
-            database = db.get_bind().url.database
-        if not database or database == ":memory:":
+            database_url = db.get_bind().url
+            database = database_url.database
+        if not database or _is_memory_sqlite(database_url):
             raise EditorError("storage")
         database_path = Path(database).resolve()
         folder = database_path.parent / ".adrobot-editor-locks"

@@ -103,7 +103,11 @@ class KeitaroClient:
         if not response.is_success:
             raise KeitaroError(
                 "http", status_code=response.status_code,
-                outcome_unknown=writing and (response.is_server_error or response.status_code == 408),
+                outcome_unknown=writing and (
+                    response.is_server_error
+                    or response.status_code == 408
+                    or 300 <= response.status_code < 400
+                ),
             )
         try:
             data = response.json(parse_constant=_reject_nonfinite_json)
